@@ -5,6 +5,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain_groq import ChatGroq
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Load Groq API key from env
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
