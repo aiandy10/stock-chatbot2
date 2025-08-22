@@ -14,14 +14,14 @@ from app.tools.strategy_tools import (
     range_trading_strategy,
     summarize_indicators
 )
-from app.rag import get_context  # corrected name
+from app.rag import get_context, get_groq_summary  # includes Groq summarizer
 
 # --------------------------------------------------------------------------------------
 # Strategy registry — strict naming convention
 # --------------------------------------------------------------------------------------
 STRATEGY_FUNCTIONS = {
     "swing": swing_strategy,
-    "scalping": scalping_strategy,             # intraday fetch internally
+    "scalping": scalping_strategy,
     "long_term_investment": long_term_investment_strategy,
     "position_trading": position_trading_strategy,
     "momentum_trading": momentum_trading_strategy,
@@ -35,7 +35,6 @@ STRATEGY_FUNCTIONS = {
 # Helpers
 # --------------------------------------------------------------------------------------
 def _df_to_price_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Normalize OHLCV data for frontend charts."""
     out = df.reset_index()
     if "Date" not in out.columns:
         out.rename(columns={out.columns[0]: "Date"}, inplace=True)
@@ -43,7 +42,6 @@ def _df_to_price_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return out.to_dict(orient="records")
 
 def _pack_indicators_with_price(df: pd.DataFrame) -> Dict[str, Any]:
-    """Compute full indicator summary and embed price_data for chart."""
     indicators = summarize_indicators(df)
     if not isinstance(indicators, dict):
         indicators = {"summary": indicators}
@@ -51,7 +49,6 @@ def _pack_indicators_with_price(df: pd.DataFrame) -> Dict[str, Any]:
     return indicators
 
 def summarize_fundamentals(f: dict) -> str:
-    """Turn raw fundamentals dict into a concise, number‑driven narrative."""
     bullets = []
     price = f.get("currentPrice")
     prev_close = f.get("previousClose")
@@ -96,26 +93,16 @@ def summarize_fundamentals(f: dict) -> str:
 # Main Orchestrator
 # --------------------------------------------------------------------------------------
 def run_strategies(stock: str, strategies: List[str], length: int = 30) -> Dict[str, Any]:
-    """
-    Fetches data, runs selected strategies (stock, df),
-    and returns structured + narrative results for frontend & LLM.
-    """
-    # 1) Price history
     df = get_stock_history(stock, period=f"{length}d")
     if df is None or df.empty:
         raise ValueError(f"No price history for {stock} ({length}d).")
 
-    # 2) Fundamentals
     fundamentals = get_stock_info(stock)
     fundamentals_summary = summarize_fundamentals(fundamentals)
 
-    # 3) Context (news, filings, historical notes)
     rag_context = get_context(stock)
-
-    # 4) Indicators snapshot (shared for all strategies)
     shared_indicators = _pack_indicators_with_price(df)
 
-    # 5) Run strategies
     results: Dict[str, Any] = {}
     for strat_in in strategies:
         key = (strat_in or "").strip().lower()
@@ -125,7 +112,7 @@ def run_strategies(stock: str, strategies: List[str], length: int = 30) -> Dict[
             continue
 
         try:
-            summary_text: str = fn(stock, df)  # rich bullet‑point analysis
+            summary_text: str = fn(stock, df)
             results[strat_in] = {
                 "summary": summary_text,
                 "indicators": shared_indicators,
@@ -133,11 +120,18 @@ def run_strategies(stock: str, strategies: List[str], length: int = 30) -> Dict[
         except Exception as e:
             results[strat_in] = {"error": f"{type(e).__name__}: {e}"}
 
-    # 6) Return payload
+    strategy_summaries = {
+        k: v.get("summary", "") for k, v in results.items() if "summary" in v
+    }
+
+    groq_output = get_groq_summary(stock, fundamentals_summary, strategy_summaries, rag_context)
+
     return {
         "stock": stock,
-        "fundamentals": fundamentals,               # full dict for LLM grounding
-        "fundamentals_summary": fundamentals_summary, # human‑readable for Analysis tab
+        "fundamentals": fundamentals,
+        "fundamentals_summary": fundamentals_summary,
         "strategies": results,
-        "rag_context": rag_context
+        "rag_context": rag_context,
+        "groq_summary": groq_output["groq_summary"],
+        "groq_signal": groq_output["groq_signal"]
     }
