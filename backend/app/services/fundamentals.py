@@ -1,4 +1,3 @@
-# services/fundamentals.py
 import yfinance as yf
 
 def get_fundamentals(symbol: str):

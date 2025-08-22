@@ -1,92 +1,107 @@
-# # backend/app/main.py
-
-# from fastapi import FastAPI, Query
+# from fastapi import FastAPI
 # from fastapi.middleware.cors import CORSMiddleware
 # from pydantic import BaseModel
-# from app.rag import answer_question, load_docs
 
-# # Init app
+# from app.graph import build_graph
+# from app.services.fundamentals import get_fundamentals
+
+# # --- FastAPI App ---
 # app = FastAPI(
 #     title="Stock AI Assistant",
-#     description="AI-powered stock market assistant with scalping, swing trading, and RAG",
+#     description="AI-powered stock market assistant with RAG + Technical/Fundamental Analysis",
 #     version="1.0.0",
 # )
 
-# # Enable CORS for frontend/dev
+# # --- CORS ---
 # app.add_middleware(
 #     CORSMiddleware,
-#     allow_origins=["*"],   # in prod, restrict this
+#     allow_origins=["*"],  # In production, restrict this
 #     allow_credentials=True,
 #     allow_methods=["*"],
 #     allow_headers=["*"],
 # )
 
-# # Request models
-# class QueryBody(BaseModel):
-#     query: str
+# # --- Request Models ---
+# class ChatQuery(BaseModel):
+#     stock: str
+#     strategy: str
+#     length: str
 
-# class IngestRequest(BaseModel):
-#     texts: list[str]
-
+# # --- Routes ---
 # @app.get("/")
 # async def root():
-#     return {"message": "✅ Stock AI Assistant is running!"}
+#     return {"message": "✅ Stock AI Assistant running"}
 
-
-# # ✅ GET version for Streamlit frontend
-# @app.get("/chat")
-# async def chat_get(
-#     stock: str = Query(...),
-#     strategy: str = Query(...),
-#     length: str = Query(...)
-# ):
-#     query = f"Give a {length} {strategy} trading analysis for {stock}."
-#     response = answer_question(query)
-#     return {"answer": response}
-
-
-# # ✅ POST version for flexibility
 # @app.post("/chat")
-# async def chat_post(query: QueryBody):
-#     response = answer_question(query.query)
-#     return {"answer": response}
-
-
-# @app.post("/ingest")
-# async def ingest(req: IngestRequest):
+# async def chat(query: ChatQuery):
 #     """
-#     Ingest raw texts into Chroma DB for RAG.
-#     Example body:
-#     {
-#       "texts": ["RSI is good for scalping when tuned between 1-min and 5-min charts."]
-#     }
+#     Main chat endpoint using LangGraph pipeline.
+#     Runs fundamentals, indicators, strategy output, and RAG context
+#     through a structured prompt to Groq.
 #     """
-#     load_docs(req.texts)
-#     return {"status": "✅ Documents ingested", "docs": len(req.texts)}
+#     workflow = build_graph()
+#     state = workflow.invoke({
+#         "stock": query.stock,
+#         "strategy": query.strategy,
+#         "length": query.length
+#     })
+#     return {"answer": state["answer"]}
 
-# backend/app/main.py
-# backend/app/main.py
-from fastapi import FastAPI
+# @app.get("/fundamentals/{stock_symbol}")
+# async def fundamentals(stock_symbol: str):
+#     """
+#     Return fundamentals for a given stock symbol.
+#     Used by the frontend's Fundamentals tab.
+#     """
+#     return get_fundamentals(stock_symbol)
+
+# # @app.post("/chat")
+# # async def chat(query: ChatQuery):
+# #     print("DEBUG incoming query:", query.dict())  # See exactly what came in
+# #     workflow = build_graph()
+# #     try:
+# #         state = workflow.invoke({
+# #             "stock": query.stock,
+# #             "strategy": query.strategy,
+# #             "length": query.length
+# #         })
+# #         return {"answer": state["answer"]}
+# #     except Exception as e:
+# #         import traceback
+# #         traceback.print_exc()  # Print full error to terminal
+# #         return {"error": str(e)}
+
+# @app.post("/chat")
+# async def chat(query: ChatQuery):
+#     print("DEBUG incoming query:", query.dict())  # <--- Add this
+#     workflow = build_graph()
+#     state = workflow.invoke({
+#         "stock": query.stock,
+#         "strategy": query.strategy,
+#         "length": query.length
+#     })
+#     return {"answer": state["answer"]}
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from app.rag import answer_question, load_docs
+from app.orchestrator import run_analysis
+from app.services.fundamentals import get_fundamentals
 
 app = FastAPI(
     title="Stock AI Assistant",
-    description="AI-powered stock market assistant with RAG",
+    description="Grounded stock analysis with fundamentals, indicators, strategy, and RAG",
     version="1.0.0",
 )
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # tighten for prod
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Request models
 class ChatQuery(BaseModel):
     stock: str
     strategy: str
@@ -98,12 +113,17 @@ async def root():
 
 @app.post("/chat")
 async def chat(query: ChatQuery):
-    """Main chat endpoint"""
-    response = answer_question(query.stock, query.strategy, query.length)
-    return {"answer": response}
+    # Hard guard to prevent empty state
+    if not query.stock or not query.strategy or not query.length:
+        raise HTTPException(status_code=400, detail="Missing fields: stock, strategy, length")
+    try:
+        answer = run_analysis(stock=query.stock, strategy=query.strategy, length=query.length)
+        return {"answer": answer}
+    except Exception as e:
+        # Surface the error to help you debug
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
-@app.post("/ingest/{stock_symbol}")
-async def ingest(stock_symbol: str):
-    """Ingest historical data for a stock"""
-    load_docs(stock_symbol)
-    return {"status": f"✅ {stock_symbol} data ingested"}
+@app.get("/fundamentals/{stock_symbol}")
+async def fundamentals(stock_symbol: str):
+    return get_fundamentals(stock_symbol)
+

@@ -1,71 +1,77 @@
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
-
-# Import your existing modules
 from app.services.stock_service import get_stock_info, get_stock_history
 from app.services.fundamentals import get_fundamentals
-from app.tools.strategy_tools import swing_strategy, scalping_strategy
+from app.tools.strategy_tools import summarize_indicators, swing_strategy, scalping_strategy
 from app.rag import get_context
 from app.llm import llm, RESPONSE_TEMPLATES
 
-
-# Define the "state" object that flows between nodes
 class BotState(Dict[str, Any]): 
     pass
 
-
-# ---- Nodes ----
 def fetch_stock_info(state: BotState) -> BotState:
-    stock = state["stock"]
-    state["stock_info"] = get_stock_info(stock)
+    state["stock_info"] = get_stock_info(state["stock"])
     return state
-
 
 def fetch_fundamentals(state: BotState) -> BotState:
-    stock = state["stock"]
-    state["fundamentals"] = get_fundamentals(stock)
+    state["fundamentals"] = get_fundamentals(state["stock"])
     return state
-
 
 def fetch_history(state: BotState) -> BotState:
-    stock = state["stock"]
-    state["history"] = get_stock_history(stock, period="6mo")
+    state["history"] = get_stock_history(state["stock"], period="6mo")
     return state
-
 
 def apply_strategy(state: BotState) -> BotState:
-    strategy = state.get("strategy", "swing")
+    df = state["history"]
+    state["indicators"] = summarize_indicators(df)
 
     strategies = {
-        "swing": swing_strategy,
-        "scalping": scalping_strategy,
+        "swing": lambda s: swing_strategy(s, df),
+        "scalping": scalping_strategy
     }
-
-    fn = strategies.get(strategy)
-    if not fn:
-        state["strategy_output"] = f"Strategy {strategy} not supported"
-    else:
-        state["strategy_output"] = fn(state["stock"])
-
+    fn = strategies.get(state["strategy"].lower())
+    state["strategy_output"] = fn(state["stock"]) if fn else f"Strategy {state['strategy']} not supported"
     return state
-
 
 def rag_context(state: BotState) -> BotState:
-    stock = state["stock"]
-    state["rag_context"] = get_context(stock)
+    state["rag_context"] = get_context(state["stock"])
     return state
-
 
 def llm_response(state: BotState) -> BotState:
     template = RESPONSE_TEMPLATES.get(state["length"], RESPONSE_TEMPLATES["medium"])
 
+    fundamentals_str = "\n".join(
+        f"- {k}: {v}" for k, v in state.get("fundamentals", {}).items() if v is not None
+    )
+    indicators_str = "\n".join(
+        f"- {k}: {v}" for k, v in state.get("indicators", {}).items() if v is not None
+    )
+    recent_closes = ", ".join(f"{p:.2f}" for p in state["history"]["Close"].tail(5))
+
     prompt = f"""
-Stock: {state['stock_info'].get('longName')} ({state['stock']})
-Price: {state['stock_info'].get('currentPrice')}
-Fundamentals: {state.get('fundamentals')}
-Recent Close: {list(state['history']['Close'].tail(5))}
-Strategy Output: {state.get('strategy_output')}
-Context: {state.get('rag_context')}
+You are a stock market analysis assistant.
+Base your analysis ONLY on the provided data.
+If data is missing, say so. Do not make up numbers.
+
+### Stock Information
+- Name: {state['stock_info'].get('longName')}
+- Symbol: {state['stock']}
+- Current Price: {state['stock_info'].get('currentPrice')}
+
+### Fundamentals
+{fundamentals_str}
+
+### Technical Indicators
+{indicators_str}
+
+### Strategy Output ({state['strategy']}):
+{state.get('strategy_output')}
+
+### Recent Closing Prices (last 5 days)
+{recent_closes}
+
+### External Market Context (RAG)
+{state.get('rag_context')}
 
 Now, {template}
 """
@@ -74,12 +80,8 @@ Now, {template}
     state["answer"] = response.content
     return state
 
-
-# ---- Graph Definition ----
 def build_graph():
     workflow = StateGraph(BotState)
-
-    # Add nodes
     workflow.add_node("stock_info", fetch_stock_info)
     workflow.add_node("fundamentals", fetch_fundamentals)
     workflow.add_node("history", fetch_history)
@@ -87,10 +89,7 @@ def build_graph():
     workflow.add_node("rag", rag_context)
     workflow.add_node("llm", llm_response)
 
-    # Set entry point
     workflow.set_entry_point("stock_info")
-
-    # Execution order
     workflow.add_edge("stock_info", "fundamentals")
     workflow.add_edge("fundamentals", "history")
     workflow.add_edge("history", "strategy")

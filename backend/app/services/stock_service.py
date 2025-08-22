@@ -20,17 +20,17 @@
 #         return {"error": str(e)}
 
 # services/stock_service.py
+
 import yfinance as yf
-import pandas as pd
 
 def get_stock_history(symbol: str, period="6mo"):
-    """Return historical OHLCV data"""
     stock = yf.Ticker(symbol)
     hist = stock.history(period=period)
-    return hist.reset_index()
+    if hist is None or hist.empty:
+        raise ValueError(f"No history returned for {symbol}")
+    return hist  # keep Date index; columns: Open, High, Low, Close, Volume
 
 def get_stock_info(symbol: str):
-    """Return latest price and fundamentals"""
     stock = yf.Ticker(symbol)
     info = stock.info
     return {
@@ -44,4 +44,3 @@ def get_stock_info(symbol: str):
         "marketCap": info.get("marketCap"),
         "volume": info.get("volume"),
     }
-
