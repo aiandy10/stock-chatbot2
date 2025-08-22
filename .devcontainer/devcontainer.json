@@ -1,0 +1,5 @@
+{
+  "name": "stock-chatbot2",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "./.devcontainer/postCreateCommand.sh"
+}
