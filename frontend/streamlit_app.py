@@ -1,100 +1,97 @@
-# import streamlit as st
-# import requests
-# import pandas as pd
-# import plotly.graph_objects as go
-# from io import StringIO
-
-# # --- Backend API URL ---
-# # If running in Codespaces, replace with your forwarded backend URL
-# API_URL = "http://127.0.0.1:8000"
-
-# st.set_page_config(page_title="Stock-Chatbot2", layout="wide")
-# st.title("📈 Stock-Chatbot2 — Data‑Driven Stock Analysis")
-
-# # --- Sidebar Inputs ---
-# st.sidebar.header("Analysis Settings")
-# stock = st.sidebar.text_input("Enter NSE Stock Symbol", value="TCS.NS")
-# strategy = st.sidebar.selectbox("Strategy", ["swing", "scalping"])
-# length = st.sidebar.selectbox("Response Length", ["short", "medium", "long"])
-
-# if st.sidebar.button("Run Analysis"):
-#     if stock and strategy and length:
-#         payload = {
-#             "stock": stock,
-#             "strategy": strategy,
-#             "length": length
-#         }
-#         try:
-#             with st.spinner("Fetching analysis..."):
-#                 # --- Call backend /chat ---
-#                 response = requests.post(f"{API_URL}/chat", json=payload)
-#                 if response.status_code == 200:
-#                     answer = response.json().get("answer", "No answer returned.")
-
-#                     # --- Tabs ---
-#                     tab1, tab2, tab3 = st.tabs(["💡 Analysis", "📊 Technical Chart", "📑 Fundamentals"])
-
-#                     # Tab 1: LLM Analysis
-#                     with tab1:
-#                         st.markdown(f"### Analysis for **{stock}** ({strategy} | {length})")
-#                         st.write(answer)
-
-#                     # Tab 2: Technical Chart
-#                     with tab2:
-#                         try:
-#                             hist_url = f"https://query1.finance.yahoo.com/v7/finance/download/{stock}?period1=0&period2=9999999999&interval=1d&events=history"
-#                             hist_resp = requests.get(hist_url)
-#                             if hist_resp.status_code == 200:
-#                                 df = pd.read_csv(StringIO(hist_resp.text))
-#                                 fig = go.Figure(data=[go.Candlestick(
-#                                     x=df['Date'],
-#                                     open=df['Open'],
-#                                     high=df['High'],
-#                                     low=df['Low'],
-#                                     close=df['Close'],
-#                                     name="Price"
-#                                 )])
-#                                 fig.update_layout(title=f"{stock} Price Chart", xaxis_rangeslider_visible=False)
-#                                 st.plotly_chart(fig, use_container_width=True)
-#                             else:
-#                                 st.warning("Could not fetch chart data.")
-#                         except Exception as e:
-#                             st.error(f"Chart error: {e}")
-
-#                     # Tab 3: Fundamentals
-#                     with tab3:
-#                         try:
-#                             fund_resp = requests.get(f"{API_URL}/fundamentals/{stock}")
-#                             if fund_resp.status_code == 200:
-#                                 fundamentals = fund_resp.json()
-#                                 st.table(pd.DataFrame(list(fundamentals.items()), columns=["Metric", "Value"]))
-#                             else:
-#                                 st.warning("Could not fetch fundamentals.")
-#                         except Exception as e:
-#                             st.error(f"Fundamentals error: {e}")
-
-#                 else:
-#                     st.error(f"Backend error: {response.status_code}")
-#         except Exception as e:
-#             st.error(f"Exception: {e}")
-
 import streamlit as st
 import requests
+import pandas as pd
+import plotly.graph_objects as go
 
-API_URL = "http://127.0.0.1:8000"  # use your Codespaces forwarded URL if needed
+# ----------------------------
+# CONFIG
+# ----------------------------
+API_BASE = "http://localhost:8000"  # Change if backend is hosted elsewhere
+ANALYZE_URL = f"{API_BASE}/analyze"
+STRATEGIES_URL = f"{API_BASE}/strategies"
 
-st.set_page_config(page_title="Stock-Chatbot2", layout="centered")
-st.title("📈 Stock-Chatbot2 — Grounded Analysis")
+st.set_page_config(page_title="Stock‑Chatbot2", layout="wide")
+st.title("📈 Stock‑Chatbot2 — AI‑Powered Trading Assistant")
 
-stock = st.text_input("NSE Symbol", value="TCS.NS")
-strategy = st.selectbox("Strategy", ["swing", "scalping"])
-length = st.selectbox("Response Length", ["short", "medium", "long"])
+# ----------------------------
+# FETCH AVAILABLE STRATEGIES
+# ----------------------------
+try:
+    available_strategies = requests.get(STRATEGIES_URL).json()
+    if not isinstance(available_strategies, list):
+        raise ValueError("Invalid strategies format from backend")
+except Exception as e:
+    st.error(f"⚠️ Could not fetch strategies from backend: {e}")
+    available_strategies = ["Swing", "Scalping"]  # fallback
 
-if st.button("Analyze"):
-    payload = {"stock": stock, "strategy": strategy, "length": length}
-    try:
-        resp = requests.post(f"{API_URL}/chat", json=payload, timeout=60)
-        st.json(resp.json())
-    except Exception as e:
-        st.error(str(e))
+# ----------------------------
+# SIDEBAR INPUTS
+# ----------------------------
+stock = st.sidebar.text_input("Stock Symbol", value="TCS.NS")
+strategies = st.sidebar.multiselect(
+    "Select Strategies",
+    available_strategies,
+    default=[available_strategies[0]] if available_strategies else []
+)
+length = st.sidebar.number_input("Data Length (days)", min_value=10, max_value=365, value=60)
 
+# ----------------------------
+# RUN ANALYSIS
+# ----------------------------
+if st.sidebar.button("Run Analysis"):
+    if not stock or not strategies:
+        st.warning("Please enter a stock symbol and select at least one strategy.")
+    else:
+        with st.spinner("Fetching data and running strategies..."):
+            payload = {"stock": stock, "strategies": strategies, "length": length}
+            try:
+                response = requests.post(ANALYZE_URL, json=payload)
+                if response.status_code != 200:
+                    st.error(f"Error {response.status_code}: {response.text}")
+                else:
+                    data = response.json()
+
+                    # ----------------------------
+                    # TABS
+                    # ----------------------------
+                    tab1, tab2, tab3 = st.tabs(["📊 Analysis", "📈 Technical Chart", "📑 Fundamentals"])
+
+                    # Tab 1 — Analysis
+                    with tab1:
+                        for strat, result in data.get("strategies", {}).items():
+                            st.subheader(f"{strat} Strategy")
+                            st.write(f"**Signal:** {result.get('signal', 'N/A')}")
+                            st.json(result.get("indicators", {}))
+
+                    # Tab 2 — Technical Chart
+                    with tab2:
+                        # Try to get price data from the first strategy's indicators
+                        first_strat = next(iter(data.get("strategies", {}).values()), {})
+                        price_data = first_strat.get("indicators", {}).get("price_data")
+
+                        if price_data:
+                            df = pd.DataFrame(price_data)
+                            if "Date" in df.columns:
+                                df["Date"] = pd.to_datetime(df["Date"])
+                            fig = go.Figure(data=[go.Candlestick(
+                                x=df["Date"],
+                                open=df["Open"],
+                                high=df["High"],
+                                low=df["Low"],
+                                close=df["Close"]
+                            )])
+                            fig.update_layout(title=f"{stock} Price Chart", xaxis_rangeslider_visible=False)
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info("No price data available for chart.")
+
+                    # Tab 3 — Fundamentals
+                    with tab3:
+                        fundamentals = data.get("fundamentals", {})
+                        if fundamentals:
+                            st.table(pd.DataFrame.from_dict(fundamentals, orient="index", columns=["Value"]))
+                        else:
+                            st.info("No fundamentals data available.")
+
+            except Exception as e:
+                st.error(f"Request failed: {e}")

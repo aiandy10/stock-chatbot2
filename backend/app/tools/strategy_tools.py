@@ -806,3 +806,18 @@ STRATEGY_FUNCTIONS = {
     "trend_following": trend_following_strategy,
     "range_trading": range_trading_strategy,
 }
+
+# def run_swing_strategy(df):
+#     return swing_strategy(df)  # replace with your actual function name
+
+# def run_scalping_strategy(df):
+#     return scalping_strategy(df)
+
+# def run_breakout_strategy(df):
+#     return breakout_strategy(df)
+
+# def run_mean_reversion_strategy(df):
+#     return mean_reversion_strategy(df)
+
+# def run_momentum_strategy(df):
+#     return momentum_strategy(df)

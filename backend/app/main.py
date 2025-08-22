@@ -82,48 +82,60 @@
 #     })
 #     return {"answer": state["answer"]}
 
-from fastapi import FastAPI, HTTPException
+# backend/app/main.py
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from app.orchestrator import run_analysis
-from app.services.fundamentals import get_fundamentals
+from app.orchestrator import run_strategies
 
+
+# Initialize FastAPI app
 app = FastAPI(
-    title="Stock AI Assistant",
-    description="Grounded stock analysis with fundamentals, indicators, strategy, and RAG",
-    version="1.0.0",
+    title="Stock‑Chatbot2 API",
+    description="Backend API for Stock‑Chatbot2 — runs strategies and returns data‑grounded analysis",
+    version="1.0.0"
 )
 
+# Enable CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten for prod
+    allow_origins=["*"],  # You can restrict this to your frontend domain later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ChatQuery(BaseModel):
+# Request model
+class StrategyRequest(BaseModel):
     stock: str
-    strategy: str
-    length: str
+    strategies: list
+    length: int = 30
 
+# Health check route
 @app.get("/")
 async def root():
-    return {"message": "✅ Stock AI Assistant running"}
+    return {"status": "ok", "message": "Stock‑Chatbot2 backend is running"}
 
-@app.post("/chat")
-async def chat(query: ChatQuery):
-    # Hard guard to prevent empty state
-    if not query.stock or not query.strategy or not query.length:
-        raise HTTPException(status_code=400, detail="Missing fields: stock, strategy, length")
-    try:
-        answer = run_analysis(stock=query.stock, strategy=query.strategy, length=query.length)
-        return {"answer": answer}
-    except Exception as e:
-        # Surface the error to help you debug
-        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+# Main analysis route
+@app.post("/analyze")
+async def analyze(request: StrategyRequest):
+    """
+    Accepts stock symbol, list of strategies, and optional length.
+    Returns fundamentals, strategy outputs, and RAG context.
+    """
+    result = run_strategies(
+        stock=request.stock,
+        strategies=request.strategies,
+        length=request.length
+    )
+    return result
 
-@app.get("/fundamentals/{stock_symbol}")
-async def fundamentals(stock_symbol: str):
-    return get_fundamentals(stock_symbol)
+@app.get("/strategies")
+async def get_strategies():
+    """
+    Returns the list of available strategies supported by the backend.
+    """
+    return ["Swing", "Scalping", "Breakout", "Mean Reversion", "Momentum"]
+
 

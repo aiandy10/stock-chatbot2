@@ -28,7 +28,7 @@ def get_stock_history(symbol: str, period="6mo"):
     hist = stock.history(period=period)
     if hist is None or hist.empty:
         raise ValueError(f"No history returned for {symbol}")
-    return hist  # keep Date index; columns: Open, High, Low, Close, Volume
+    return hist  # Date index; columns: Open, High, Low, Close, Volume
 
 def get_stock_info(symbol: str):
     stock = yf.Ticker(symbol)
@@ -44,3 +44,18 @@ def get_stock_info(symbol: str):
         "marketCap": info.get("marketCap"),
         "volume": info.get("volume"),
     }
+
+# --- Wrappers to match orchestrator.py expectations ---
+
+def fetch_price_data(symbol: str, length: int = 30):
+    """
+    Wrapper for get_stock_history to match orchestrator's expected name.
+    Converts length (days) into yfinance period format.
+    """
+    return get_stock_history(symbol, period=f"{length}d")
+
+def fetch_fundamentals(symbol: str):
+    """
+    Wrapper for get_stock_info to match orchestrator's expected name.
+    """
+    return get_stock_info(symbol)

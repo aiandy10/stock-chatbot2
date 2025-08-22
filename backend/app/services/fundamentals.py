@@ -11,3 +11,5 @@ def get_fundamentals(symbol: str):
         "eps": info.get("trailingEps"),
         "marketCap": info.get("marketCap"),
     }
+def fetch_fundamentals(symbol: str):
+    return get_stock_info(symbol)  # or whatever your main fundamentals function is
