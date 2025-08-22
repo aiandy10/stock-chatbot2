@@ -57,11 +57,17 @@ if st.sidebar.button("Run Analysis"):
                     tab1, tab2, tab3 = st.tabs(["📊 Analysis", "📈 Technical Chart", "📑 Fundamentals"])
 
                     # Tab 1 — Analysis
+                    # Tab 1 — Analysis
                     with tab1:
+                        st.subheader("🧠 AI Summary")
+                        st.markdown(data.get("groq_summary", "No summary available."))
+                        st.markdown(f"**Final Signal:** {data.get('groq_signal', 'N/A')}")
+                    
+                        st.subheader("📊 Strategy Breakdown")
                         for strat, result in data.get("strategies", {}).items():
-                            st.subheader(f"{strat} Strategy")
-                            st.write(f"**Signal:** {result.get('signal', 'N/A')}")
-                            st.json(result.get("indicators", {}))
+                            st.markdown(f"### {strat} Strategy")
+                            st.markdown(result.get("summary", "No summary available."))
+                            st.markdown(f"**Signal:** {result.get('signal', 'N/A')}")
 
                     # Tab 2 — Technical Chart
                     with tab2:
