@@ -214,3 +214,7 @@ __pycache__/
 node_modules/
 .streamlit/
 
+venv/
+__pycache__/
+*.pyc
+.env
