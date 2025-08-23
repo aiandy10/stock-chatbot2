@@ -10,8 +10,8 @@ API_BASE = "http://localhost:8000"  # Change if backend is hosted elsewhere
 ANALYZE_URL = f"{API_BASE}/analyze"
 STRATEGIES_URL = f"{API_BASE}/strategies"
 
-st.set_page_config(page_title="Stock‑Chatbot2", layout="wide")
-st.title("📈 Stock‑Chatbot2 — AI‑Powered Trading Assistant")
+st.set_page_config(page_title="Stock-Chatbot2", layout="wide")
+st.title("📈 Stock-Chatbot2 — AI-Powered Trading Assistant")
 
 # ----------------------------
 # FETCH AVAILABLE STRATEGIES
@@ -57,23 +57,24 @@ if st.sidebar.button("Run Analysis"):
                     tab1, tab2, tab3 = st.tabs(["📊 Analysis", "📈 Technical Chart", "📑 Fundamentals"])
 
                     # Tab 1 — Analysis
-                    # Tab 1 — Analysis
                     with tab1:
                         st.subheader("🧠 AI Summary")
                         st.markdown(data.get("groq_summary", "No summary available."))
                         st.markdown(f"**Final Signal:** {data.get('groq_signal', 'N/A')}")
-                    
+
                         st.subheader("📊 Strategy Breakdown")
                         for strat, result in data.get("strategies", {}).items():
-                            st.markdown(f"### {strat} Strategy")
-                            st.markdown(result.get("summary", "No summary available."))
-                            st.markdown(f"**Signal:** {result.get('signal', 'N/A')}")
+                            st.markdown(f"### {strat.capitalize()} Strategy")
+                            if "error" in result:
+                                st.error(result["error"])
+                            else:
+                                st.markdown(result.get("summary", "No summary available."))
+                                st.markdown(f"**Signal:** {result.get('signal', 'N/A')}")
 
                     # Tab 2 — Technical Chart
                     with tab2:
-                        # Try to get price data from the first strategy's indicators
-                        first_strat = next(iter(data.get("strategies", {}).values()), {})
-                        price_data = first_strat.get("indicators", {}).get("price_data")
+                        # Prefer top-level price_data for robustness
+                        price_data = data.get("price_data")
 
                         if price_data:
                             df = pd.DataFrame(price_data)
@@ -94,7 +95,14 @@ if st.sidebar.button("Run Analysis"):
                     # Tab 3 — Fundamentals
                     with tab3:
                         fundamentals = data.get("fundamentals", {})
+                        fundamentals_summary = data.get("fundamentals_summary", "")
+
+                        if fundamentals_summary:
+                            st.markdown("### Fundamentals Summary")
+                            st.markdown(fundamentals_summary)
+
                         if fundamentals:
+                            st.markdown("### Raw Fundamentals")
                             st.table(pd.DataFrame.from_dict(fundamentals, orient="index", columns=["Value"]))
                         else:
                             st.info("No fundamentals data available.")
