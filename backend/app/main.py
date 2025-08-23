@@ -26,6 +26,7 @@
 #     stock: str
 #     strategy: str
 #     length: str
+#     response_length: str = "medium"  # Add this field with default
 
 # # --- Routes ---
 # @app.get("/")
@@ -84,10 +85,11 @@
 
 # backend/app/main.py
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from app.orchestrator import run_strategies
+from app.services.nse_stocks import fetch_nse_stocks
 
 
 # Initialize FastAPI app
@@ -133,9 +135,31 @@ async def analyze(request: StrategyRequest):
 
 @app.get("/strategies")
 async def get_strategies():
-    """
-    Returns the list of available strategies supported by the backend.
-    """
-    return ["Swing", "Scalping", "Breakout", "Mean Reversion", "Momentum"]
+    """Get available trading strategies"""
+    strategies = [
+        "Swing Trading",
+        "Scalping",
+        "Long-term Investment",
+        "Position Trading",
+        "Momentum Trading",
+        "Mean Reversion",
+        "Breakout Trading",
+        "Trend Following",
+        "Range Trading",
+        "Day Trading",
+        "Value Investing",
+        "Growth Investing",
+        "Dividend Growth",
+        "Options Trading"
+    ]
+    return {"strategies": strategies}
 
+@app.get("/stocks")
+async def get_stocks():
+    """Get list of NSE stocks for autocomplete"""
+    try:
+        stocks = fetch_nse_stocks()
+        return {"stocks": stocks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

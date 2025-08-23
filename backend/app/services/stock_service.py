@@ -23,7 +23,12 @@
 
 import yfinance as yf
 
+def add_nse_suffix(symbol: str) -> str:
+    """Add .NS suffix if not present"""
+    return f"{symbol}.NS" if not symbol.endswith('.NS') else symbol
+
 def get_stock_history(symbol: str, period="6mo"):
+    symbol = add_nse_suffix(symbol)  # Add this line
     stock = yf.Ticker(symbol)
     hist = stock.history(period=period)
     if hist is None or hist.empty:
@@ -31,6 +36,7 @@ def get_stock_history(symbol: str, period="6mo"):
     return hist  # Date index; columns: Open, High, Low, Close, Volume
 
 def get_stock_info(symbol: str):
+    symbol = add_nse_suffix(symbol)  # Add this line
     stock = yf.Ticker(symbol)
     info = stock.info
     return {
