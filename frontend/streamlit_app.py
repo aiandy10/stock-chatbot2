@@ -156,7 +156,14 @@ if st.sidebar.button("Run Analysis"):
 
                         if fundamentals:
                             st.markdown("### Raw Fundamentals")
-                            st.table(pd.DataFrame.from_dict(fundamentals, orient="index", columns=["Value"]))
+                        
+                            # Coerce all values to string to avoid ArrowTypeError
+                            fundamentals_df = pd.DataFrame.from_dict(
+                                fundamentals, orient="index", columns=["Value"]
+                            ).astype(str)
+                        
+                            st.table(fundamentals_df)
+
                         else:
                             st.info("No fundamentals data available.")
 
